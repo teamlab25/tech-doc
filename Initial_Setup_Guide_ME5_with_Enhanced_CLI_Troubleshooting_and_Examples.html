@@ -1,0 +1,754 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Initial Setup Guide for Dell PowerVault ME5 Series</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      direction: rtl;
+      text-align: right;
+    }
+    h1, h2, h3, h4 {
+      color: #333;
+    }
+    h2 {
+      border-bottom: 2px solid #36A2EB;
+      padding-bottom: 5px;
+    }
+    pre {
+      background: #f4f4f4;
+      padding: 10px;
+      border-radius: 5px;
+      overflow-x: auto;
+    }
+    canvas {
+      margin: 20px 0;
+      max-width: 100%;
+    }
+    .diagram {
+      background: #e8f0fe;
+      padding: 15px;
+      border-left: 4px solid #36A2EB;
+      margin: 15px 0;
+      border-radius: 5px;
+    }
+    .note {
+      color: #555;
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+  <!-- הוסר: <img src="powervault_me5.jpg" alt="PowerVault ME5" style="max-width: 100%; height: auto;"> -->
+
+  <h1>מדריך להתקנה ראשונית, גישה והגדרות בסיסיות של Dell PowerVault ME5 Series (עם SupportAssist)</h1>
+  <p>המדריך משתמש במונחים באנגלית כפי שמופיעים בממשק ה-PowerVault Manager (למשל, "SupportAssist," "Pools," "Hosts," "Troubleshooting") בתוך טקסט בעברית. התרשימים מוצגים כגרפים אינטראקטיביים באמצעות Chart.js, והדיאגרמות מתוארות מילולית.</p>
+
+  <h2>1. התקנה ראשונית</h2>
+  <h3>תנאים מוקדמים</h3>
+  <ul>
+    <li><strong>חומרה</strong>: מערכת PowerVault ME5 מחוברת לחשמל ולרשת, כוננים מותקנים.</li>
+    <li><strong>ציוד נדרש</strong>: מחשב עם דפדפן תואם (Chrome, Firefox, Edge), כבלי Ethernet (RJ45), כבל סדרתי (Micro-B USB עבור ME5, DB9 ל-3.5 מ"מ או USB A ל-Mini-B עבור ME4), כתובת IP זמנית או שרת DHCP.</li>
+    <li><strong>תיעוד</strong>: מסמך התקנה של Dell ופרטי רשת (כתובות IP, Subnet Mask, Gateway).</li>
+  </ul>
+
+  <h3>שלבי התקנה</h3>
+  <ol>
+    <li><strong>חיבור חשמל</strong>:
+      <ul>
+        <li>חברו יחידות חשמל והמתינו לאתחול (2-3 דקות).</li>
+        <li>ודאו שנורות LED ירוקות, ללא הבהוב אדום/כתום.</li>
+      </ul>
+    </li>
+    <li><strong>חיבור רשת</strong>:
+      <ul>
+        <li>חברו כבל Ethernet (RJ45) ליציאת הניהול (Management Port) של Controller A, המסומנת כ-"MGMT" או "0" על הבקר, כדי להתחיל את ההתקנה הראשונית.</li>
+        <li>לחיבור מלא (High Availability), חברו גם את יציאת ה-MGMT של Controller B.</li>
+        <li>חברו את הקצה השני של הכבלים למתג רשת תואם (למשל, מתג Gigabit Ethernet) או ישירות למחשב ניהול ("Admin PC") לצורך הגדרה ראשונית.</li>
+        <li>אם מחברים ישירות למחשב, הגדירו כתובת IP סטטית במחשב באותו תת-רשת (למשל, <code>10.0.0.10/24</code>) כדי לגשת ל-<code>10.0.0.2</code> (Controller A) או <code>10.0.0.3</code> (Controller B).</li>
+        <li>כתובות IP ברירת מחדל: <code>10.0.0.2</code> (Controller A), <code>10.0.0.3</code> (Controller B) או DHCP.</li>
+        <li>ודאו שימוש בכבלי Cat5e או Cat6 לתמיכה ב-Gigabit Ethernet. יציאות נוספות (למשל, Host Ports) ישמשו מאוחר יותר עבור iSCSI/FC.</li>
+      </ul>
+    </li>
+    <li><strong>בדיקת חומרה</strong>:
+      <ul>
+        <li>השתמשו בפקודה <code>show disks</code> דרך CLI (מסוף סדרתי או SSH לאחר הגדרת רשת) לבדיקת זיהוי כוננים.</li>
+      </ul>
+    </li>
+  </ol>
+
+  <div class="diagram">
+    <strong>תרשים חיבורי חומרה</strong>
+    <p><strong>תיאור</strong>: דיאגרמה המראה מערכת ME5 (מלבן עם בקרים A ו-B). קו מחבר את יציאת MGMT (מסומנת "0") של Controller A למתג (מסומן "Switch") או ישירות למחשב ניהול ("Admin PC") באמצעות כבל RJ45. חיבור של Controller B (מסומן "0") הוא אופציונלי לשלב הראשוני, אך מומלץ ל-High Availability. קו נוסף מחבר יציאת Serial Console (Micro-B USB עבור ME5, DB9 ל-3.5 מ"מ או USB A ל-Mini-B עבור ME4) למחשב טכנאי ("Tech PC"). קו מחבר יחידות חשמל לסמל חשמל. תוויות IP (למשל, <code>10.0.0.2</code>) ו-LED ירוק.</p>
+    <p class="note"><strong>הערות</strong>: צבעים: כחול (Controller A), ירוק (Controller B), אפור (כבל RJ45), שחור (Serial Console).</p>
+  </div>
+
+  <h2>2. גישה ראשונית למערכת</h2>
+  <h3>גישה לממשק PowerVault Manager</h3>
+  <ol>
+    <li><strong>חיבור דרך דפדפן</strong>:
+      <ul>
+        <li>הזינו <code>https://10.0.0.2</code> בדפדפן.</li>
+        <li>אם משתמשים ב-DHCP, זהו IP דרך CLI (<code>show network-parameters</code>).</li>
+      </ul>
+    </li>
+    <li><strong>כניסה ראשונית</strong>:
+      <ul>
+        <li>משתמש: <code>manage</code>, סיסמה: <code>!manage</code>.</li>
+        <li>שנו סיסמה מיד לאחר הכניסה.</li>
+      </ul>
+    </li>
+    <li><strong>Setup Wizard</strong>:
+      <ul>
+        <li>עקבו אחר Setup Wizard להגדרת System Name, זמן (NTP/Manual), ו-Network.</li>
+      </ul>
+    </li>
+  </ol>
+
+  <h3>שינוי סיסמה ראשונית</h3>
+  <ol>
+    <li>נווטו ל-<strong>Settings > Users</strong>.</li>
+    <li>בחרו משתמש <code>manage</code>, לחצו <strong>Modify User</strong>.</li>
+    <li>הזינו סיסמה חדשה (מינימום 8 תווים, אותיות גדולות/קטנות, מספרים, תו מיוחד).</li>
+    <li>שמרו שינויים.</li>
+  </ol>
+
+  <div class="diagram">
+    <strong>מסך כניסה ל-PowerVault Manager</strong>
+    <p><strong>תיאור</strong>: מסך דפדפן עם ממשק כניסה (מלבן עם שדות "Username" ו-"Password", מלאים ב-<code>manage</code>, <code>!manage</code>). חץ למסך "Setup Wizard" עם סמל לוח מחוונים. סמל מנעול ליד הסיסמה.</p>
+    <p class="note"><strong>הערות</strong>: תווית "Security" לשינוי סיסמה.</p>
+  </div>
+
+  <h2>3. הגדרת Network</h2>
+  <h3>הגדרות בסיסיות</h3>
+  <ol>
+    <li><strong>גישה</strong>:
+      <ul>
+        <li>נווטו ל-<strong>Settings > Network</strong>.</li>
+      </ul>
+    </li>
+    <li><strong>הגדרת כתובות IP</strong>:
+      <ul>
+        <li>בחרו יציאת רשת (למשל, Controller A, Port 0).</li>
+        <li><strong>Static</strong>: הזינו IP (למשל, <code>192.168.1.100</code>), Subnet Mask (<code>255.255.255.0</code>), Gateway (<code>192.168.1.1</code>).</li>
+        <li><strong>DHCP</strong>: ודאו שרת DHCP זמין.</li>
+        <li>חזרו עבור כל היציאות של Controller A ו-B.</li>
+      </ul>
+    </li>
+    <li><strong>הגדרת DNS</strong>:
+      <ul>
+        <li>הזינו Primary DNS ו-Secondary DNS (למשל, <code>8.8.8.8</code>, <code>8.8.4.4</code>).</li>
+        <li>הגדירו Hostname ו-Domain Name (למשל, <code>me5-storage.example.com</code>).</li>
+      </ul>
+    </li>
+    <li><strong>שמירה</strong>:
+      <ul>
+        <li>לחצו <strong>Apply</strong> ובדקו זמינות.</li>
+      </ul>
+    </li>
+  </ol>
+
+  <div class="diagram">
+    <strong>תרשים תצורת Network</strong>
+    <p><strong>תיאור</strong>: בקרים A ו-B עם יציאות רשת (MGMT) למתג או למחשב ניהול. תיבות עם IP (למשל, <code>192.168.1.100/24</code>). חץ לענן DNS (<code>8.8.8.8</code>). תיבה עם ממשק Network (שדות IP, Subnet Mask, Gateway).</p>
+    <p class="note"><strong>הערות</strong>: צבעים: כחול (A), ירוק (B).</p>
+  </div>
+
+  <h2>4. הגדרת Pools</h2>
+  <h3>יצירת Pool</h3>
+  <ol>
+    <li><strong>גישה</strong>:
+      <ul>
+        <li>נווטו ל-<strong>Maintenance > Storage</strong>.</li>
+      </ul>
+    </li>
+    <li><strong>בחירת סוג Pool</strong>:
+      <ul>
+        <li>בחרו <strong>Virtual</strong> או <strong>Linear</strong>.</li>
+      </ul>
+    </li>
+    <li><strong>הוספת Disk Group</strong>:
+      <ul>
+        <li>לחצו <strong>Add Disk Group</strong>.</li>
+        <li>בחרו כוננים (SSD/HDD) ו-RAID Level (למשל, RAID 5).</li>
+        <li>הזינו שם (למשל, <code>DiskGroup1</code>) ובחרו Pool (Pool A/B).</li>
+      </ul>
+    </li>
+    <li><strong>שמירה ואימות</strong>:
+      <ul>
+        <li>לחצו <strong>Create Disk Group</strong> ובדקו סטטוס <strong>Online</strong>.</li>
+      </ul>
+    </li>
+  </ol>
+
+  <div class="diagram">
+    <strong>תרשים מבנה Pools</strong>
+    <p><strong>תיאור</strong>: מערכת עם בקרים A ו-B. מלבנים ל-Pool A ו-Pool B. בתוך כל Pool, מלבנים ל-Disk Groups (למשל, <code>DiskGroup1</code>, RAID 5). חצים מראים חלוקת כוננים (SSD כסף, HDD שחור).</p>
+    <p class="note"><strong>הערות</strong>: תוויות RAID וסוגי כוננים.</p>
+  </div>
+
+  <h3>תרשים: Pool Capacity Allocation</h3>
+  <canvas id="poolChart"></canvas>
+  <p>תרשים פאי המראה חלוקת קיבולת בין Pool A ו-Pool B (דוגמה).</p>
+
+  <h2>5. הגדרת Hosts</h2>
+  <h3>יצירת Host</h3>
+  <ol>
+    <li><strong>גישה</strong>:
+      <ul>
+        <li>נווטו ל-<strong>Provisioning > Hosts</strong>.</li>
+      </ul>
+    </li>
+    <li><strong>הוספת Host</strong>:
+      <ul>
+        <li>לחצו <strong>Add Host</strong>, הזינו שם (למשל, <code>Server1</code>).</li>
+        <li>הזינו Initiator ID (למשל, iSCSI IQN: <code>iqn.1991-05.com.microsoft:server1.example.com</code>).</li>
+      </ul>
+    </li>
+    <li><strong>קבוצות Host</strong>:
+      <ul>
+        <li>צרו Host Group דרך <strong>Add Host Group</strong> והוסיפו Hosts.</li>
+      </ul>
+    </li>
+    <li><strong>מיפוי Volumes</strong>:
+      <ul>
+        <li>בחרו Host/Host Group, לחצו <strong>Map Volumes</strong>, בחרו Volumes והגדירו Access ו-LUN ID.</li>
+      </ul>
+    </li>
+    <li><strong>שמירה ואימות</strong>:
+      <ul>
+        <li>לחצו <strong>Apply</strong> ובדקו חיבור (למשל, iSCSI Initiator ב-Windows).</li>
+      </ul>
+    </li>
+  </ol>
+
+  <div class="diagram">
+    <strong>תרשים חיבור Hosts</strong>
+    <p><strong>תיאור</strong>: מערכת ME5 עם בקרים A ו-B. חצים מחברים Pools (A/B) ל-Hosts (<code>Server1</code>, <code>Server2</code>). תיבות עם Initiator IDs (למשל, <code>iqn...</code>). חץ מראה מיפוי Volume (Volume1).</p>
+    <p class="note"><strong>הערות</strong>: תוויות ל-LUN ID ופרוטוקול (iSCSI/FC).</p>
+  </div>
+
+  <h2>6. הגדרת SupportAssist</h2>
+  <h3>תנאים מוקדמים</h3>
+  <ul>
+    <li><strong>חיבור רשת</strong>: ודאו חיבור לאינטרנט ו-DNS מוגדרים.</li>
+    <li><strong>חשבון Dell</strong>: חשבון עסקי ב-<a href="https://mes.com">mes.com</a> עבור APEX AIOps (אופציונלי).</li>
+    <li><strong>גישה</strong>: משתמש עם הרשאות ניהול (<code>manage</code>).</li>
+  </ul>
+
+  <h3>שלבי הגדרה</h3>
+  <ol>
+    <li><strong>גישה להגדרות SupportAssist</strong>:
+      <ul>
+        <li>נווטו ל-<strong>Settings > Support > SupportAssist</strong>.</li>
+      </ul>
+    </li>
+    <li><strong>הפעלת SupportAssist</strong>:
+      <ul>
+        <li>סמנו <strong>Enable SupportAssist</strong>.</li>
+        <li>הזינו Contact Details (שם, דוא"ל, טלפון).</li>
+      </ul>
+    </li>
+    <li><strong>הגדרת חיבור לשרת Dell</strong>:
+      <ul>
+        <li>בחרו <strong>Direct Connection</strong> או <strong>Gateway</strong>.</li>
+        <li>עבור Direct Connection, ודאו שיציאות 443 (HTTPS) ו-8443 פתוחות.</li>
+        <li>עבור Gateway, הזינו IP ו-Port.</li>
+      </ul>
+    </li>
+    <li><strong>הגדרת Managed Logs</strong>:
+      <ul>
+        <li>הפעילו <strong>Managed Logs</strong> להעברת יומני Diagnostic.</li>
+        <li>בחרו תדירות (Daily/Weekly).</li>
+      </ul>
+    </li>
+    <li><strong>הגדרת APEX AIOps (אופציונלי)</strong>:
+      <ul>
+        <li>סמנו <strong>Enable APEX AIOps Infrastructure Observability</strong>.</li>
+        <li>הזינו חשבון עסקי מ-<a href="https://mes.com">mes.com</a>.</li>
+      </ul>
+    </li>
+    <li><strong>בדיקה ושמירה</strong>:
+      <ul>
+        <li>לחצו <strong>Test Connection</strong> לוודא חיבור.</li>
+        <li>לחצו <strong>Apply</strong> לשמירה.</li>
+        <li>בדקו SupportAssist Alerts ב-Dashboard.</li>
+      </ul>
+    </li>
+  </ol>
+
+  <h3>שיטות עבודה מומלצות</h3>
+  <ul>
+    <li>ודאו חיבור אינטרנט יציב.</li>
+    <li>השתמשו ב-HTTPS בלבד.</li>
+    <li>בדקו סטטוס SupportAssist ב-Dashboard מדי חודש.</li>
+  </ul>
+
+  <div class="diagram">
+    <strong>תרשים תהליך SupportAssist</strong>
+    <p><strong>תיאור</strong>: מערכת ME5 (מלבן) עם חץ לענן "Dell Support Server" (HTTPS, יציאה 443). תיבה עם ממשק SupportAssist (שדות "Enable SupportAssist," "Contact Details," "Gateway"). חץ לענן "APEX AIOps" (תווית "Optional").</p>
+    <p class="note"><strong>הערות</strong>: צבע כתום לחיבור אינטרנט.</p>
+  </div>
+
+  <h3>תרשים: SupportAssist Alerts</h3>
+  <canvas id="alertsChart"></canvas>
+  <p>תרשים עמודות המראה דוגמה של התראות SupportAssist.</p>
+
+  <h2>7. עדכון קושחה</h2>
+  <h3>תנאים מוקדמים</h3>
+  <ul>
+    <li><strong>גיבוי</strong>: גבו את תצורת המערכת דרך <strong>Maintenance > System > Save Configuration</strong>.</li>
+    <li><strong>חיבור רשת</strong>: ודאו חיבור יציב ל-PowerVault Manager (באמצעות כתובת IP של Controller A או B).</li>
+    <li><strong>קובץ קושחה</strong>: הורידו את קובץ הקושחה (.sfw) העדכני עבור PowerVault ME5 מ-<a href="https://www.dell.com/support">Dell Support</a> (בחרו את דגם המערכת ב-"Drivers & Downloads").</li>
+    <li><strong>Multi-Pathing</strong>: עבור מערכות עם בקרים כפולים, ודאו ש-Hosts מחוברים עם Multi-Pathing מוגדר כראוי (ראו <a href="https://www.dell.com/support">Dell PowerVault ME5 Series Storage System Deployment Guide</a>).</li>
+    <li><strong>זמן</strong>: בצעו את העדכון בחלון תחזוקה עם עומס I/O נמוך כדי למנוע הפרעות.</li>
+  </ul>
+
+  <h3>שלבי עדכון קושחה (באמצעות PowerVault Manager)</h3>
+  <ol>
+    <li><strong>בדיקת תנאי מערכת</strong>:
+      <ul>
+        <li>התחברו ל-PowerVault Manager כמשתמש עם הרשאות <code>manage</code> (למשל, <code>manage</code>, סיסמה: כפי שהוגדר).</li>
+        <li>בדקו את גרסת הקושחה הנוכחית ב-<strong>Maintenance > Firmware</strong>.</li>
+        <li>הריצו את פקודת ה-CLI <code>check firmware-upgrade-health</code> דרך SSH (ראו סעיף 8.6 להגדרת SSH) כדי לוודא שאין תנאים המונעים עדכון (למשל, נתונים לא כתובים ב-Cache או Disk Group בהסגר):
+          <pre># check firmware-upgrade-health
+# פלט לדוגמה: Success: The system is ready for firmware update.</pre>
+        </li>
+        <li>אם מתגלות בעיות, פתרו אותן לפני המשך (למשל, הריצו <code>clear cache</code> לניקוי Cache או פנו לתמיכת Dell עבור Disk Group בהסגר).</li>
+      </ul>
+    </li>
+    <li><strong>הורדת קובץ קושחה</strong>:
+      <ul>
+        <li>גשו ל-<a href="https://www.dell.com/support">Dell Support</a>, בחרו את דגם ה-PowerVault ME5, ונווטו ל-<strong>Drivers & Downloads</strong>.</li>
+        <li>הורידו את קובץ הקושחה (.sfw) העדכני (למשל, ME5.1.2.0.0).</li>
+        <li>בדקו את תקינות הקובץ באמצעות SHA256 Checksum (ב-Windows, השתמשו ב-<code>certutil -hashfile filename.sfw SHA256</code> והשוו לערך באתר Dell).</li>
+      </ul>
+    </li>
+    <li><strong>העלאת קובץ קושחה</strong>:
+      <ul>
+        <li>ב-PowerVault Manager, נווטו ל-<strong>Maintenance > Firmware > System</strong>.</li>
+        <li>לחצו על <strong>Browse</strong>, בחרו את קובץ ה-.sfw שהורדתם, ולחצו <strong>Upload</strong>.</li>
+        <li>המתינו להשלמת ההעלאה (כמה דקות, תלוי בגודל הקובץ).</li>
+      </ul>
+    </li>
+    <li><strong>הפעלת הקושחה</strong>:
+      <ul>
+        <li>ב-<strong>Maintenance > Firmware</strong>, מצאו את גרסת הקושחה שהועלתה ולחצו על <strong>Activate this Version</strong>.</li>
+        <li>אם המערכת מוגדרת עם בקרים כפולים ו-Partner Firmware Update (PFU) מופעל (ברירת מחדל, מומלץ), הקושחה תעודכן תחילה ב-Controller B, ולאחר מכן ב-Controller A, עם אתחול של כל בקר בתורו. התהליך אינו משבש פעילות (Non-Disruptive) אם Multi-Pathing מוגדר כראוי.</li>
+        <li><strong>הערה חשובה לגרסה ME5.1.0.1.0</strong>: אם הקושחה הנוכחית היא ME5.1.0.1.0, נטרלו את PFU לפני ההפעלה:
+          <ul>
+            <li>נווטו ל-<strong>Settings > System > Properties > Firmware Properties</strong>, בטלו את הסימון ב-<strong>Partner Firmware Update</strong>, ולחצו <strong>Apply</strong>.</li>
+            <li>הפעילו את הקושחה ב-Controller A (כמתואר לעיל).</li>
+            <li>לאחר השלמת העדכון ב-Controller A (כ-2-3 דקות לאתחול), התחברו מחדש והפעילו מחדש את PFU.</li>
+            <li>הקושחה תעודכן אוטומטית ב-Controller B.</li>
+          </ul>
+        </li>
+        <li>המתינו להשלמת התהליך (5-10 דקות לבקרים עם CPLD עדכני, עד 20 דקות עם CPLD ישן).</li>
+      </ul>
+    </li>
+    <li><strong>אימות העדכון</strong>:
+      <ul>
+        <li>לאחר אתחול הבקרים, התחברו מחדש ל-PowerVault Manager (ב-<code>https://10.0.0.2</code> או IP שהוגדר).</li>
+        <li>נווטו ל-<strong>Maintenance > Firmware</strong> וודאו שהגרסה החדשה (למשל, ME5.1.2.0.0) פעילה בשני הבקרים.</li>
+        <li>בדקו את בריאות המערכת ב-<strong>System > Health</strong>. אם הסטטוס הוא <strong>Degraded</strong> והסיבה היא גרסת קושחה שגויה, ודאו שהעליתם את הקובץ הנכון וחזרו על התהליך.</li>
+        <li>בדקו התראות ב-<strong>Maintenance > Support > Alerts</strong> לאישור שהעדכון הושלם (<strong>Event 649</strong> מציין עדכון קושחה זמין, ויופיע עדכון מוצלח).</li>
+      </ul>
+    </li>
+  </ol>
+
+  <h3>שיטות עבודה מומלצות</h3>
+  <ul>
+    <li>הפעילו SupportAssist (ראו סעיף 6) לקבלת התראות על עדכוני קושחה זמינים דרך <code>check support-assist-updates</code>.</li>
+    <li>בצעו עדכונים בחלון תחזוקה עם עומס I/O נמוך.</li>
+    <li>ודאו ש-Multi-Pathing מוגדר כראוי במערכות עם בקרים כפולים.</li>
+    <li>אל תבצעו הפסקת חשמל או אתחול בקר במהלך העדכון, כדי למנוע נזק לבקר.</li>
+    <li>אם העדכון נכשל, אספו יומנים דרך <strong>Maintenance > Support > Collect Logs</strong> ופנו לתמיכת Dell ב-<a href="https://www.dell.com/support">Dell Support</a>.</li>
+  </ul>
+
+  <h3>פתרון תקלות</h3>
+  <ul>
+    <li><strong>ממשק PowerVault Manager לא מגיב</strong>:
+      <ul>
+        <li>אם הממשק לא מגיב לאחר ניסיון עדכון עם PFU מופעל, התחברו ל-Controller B (למשל, <code>10.0.0.3</code>) דרך SSH או PowerVault Manager.</li>
+        <li><strong>דרך PowerVault Manager</strong>:
+          <ul>
+            <li>נווטו ל-<strong>Maintenance > Hardware</strong>, בחרו <strong>Restart/Shutdown System > Restart MC</strong>, סמנו את Controller A, ולחצו <strong>Apply</strong>. פעולה זו לא משפיעה על פעילות ייצור.</li>
+            <li>חזרו על התהליך עבור Controller B אם נדרש.</li>
+          </ul>
+        </li>
+        <!-- חדש: הוספת הנחיות לביצוע Restart MC דרך SSH -->
+        <li><strong>דרך SSH</strong>:
+          <ul>
+            <li>התחברו ל-Controller B דרך SSH (למשל, <code>10.0.0.3</code>, משתמש: <code>manage</code>, סיסמה: כפי שהוגדר) באמצעות תוכנת SSH כמו PuTTY (ראו סעיף <strong>חיבור CLI באמצעות PuTTY</strong>).</li>
+            <li>בדקו את מצב הבקרים עם:
+              <pre>show controllers</pre>
+              ודאו ש-Controller A מראה מצב <strong>Fault</strong> או <strong>Not Ready</strong>.
+            </li>
+            <li>הריצו את הפקודה לאתחול ה-MC של Controller A:
+              <pre>restart mc A</pre>
+              המתינו 1-2 דקות עד להשלמת האתחול.
+            </li>
+            <li>בדקו שוב את הסטטוס עם:
+              <pre>show controllers</pre>
+              ודאו ש-Controller A חזר למצב <strong>Operational</strong>.
+            </li>
+            <li>אם Controller B לא מגיב, התחברו ל-Controller A (למשל, <code>10.0.0.2</code>) והריצו:
+              <pre>restart mc B</pre>
+            </li>
+            <li>לאחר שהבקרים תקינים, נסו להתחבר מחדש לממשק PowerVault Manager (למשל, <code>https://10.0.0.2</code>).</li>
+            <li>אם הבעיה נמשכת, בדקו הגדרות רשת עם:
+              <pre>show network-parameters</pre>
+              ואספו יומנים עם:
+              <pre>collect logs</pre>
+              פנו לתמיכת Dell ב-<a href="https://www.dell.com/support">Dell Support</a> עם ה-Service Tag וקובץ היומנים.
+            </li>
+          </ul>
+        </li>
+        <!-- סוף תוספת -->
+      </ul>
+    </li>
+    <li><strong>כשל בעדכון</strong>:
+      <ul>
+        <li>ודאו שהעליתם את קובץ הקושחה הנכון (.sfw) וחזרו על התהליך.</li>
+        <li>הריצו <code>check firmware-upgrade-health</code> לאיתור בעיות.</li>
+        <li>אספו יומנים דרך <strong>Maintenance > Support > Collect Logs</strong> ופנו לתמיכת Dell.</li>
+      </ul>
+    </li>
+  </ul>
+
+  <div class="diagram">
+    <strong>תרשים תהליך עדכון קושחה</strong>
+    <p><strong>תיאור</strong>: מלבן המייצג את PowerVault ME5 עם בקרים A ו-B. חץ מ-Controller A לענן "Dell Support" להורדת קובץ .sfw. מלבן עם ממשק <strong>Maintenance > Firmware</strong> (שדות "Browse," "Upload," "Activate this Version"). חצים מציינים עדכון קושחה ב-Controller B, אתחול, לאחר מכן עדכון ואתחול ב-Controller A. תווית "Multi-Pathing" עם חץ ל-Hosts מחוברים. תווית "SupportAssist" עם חץ לענן "APEX AIOps".</p>
+    <p class="note"><strong>הערות</strong>: צבע כחול ל-Controller A, ירוק ל-Controller B, כתום לחיבור לענן.</p>
+  </div>
+
+  <h2>8. הערות ו-Troubleshooting</h2>
+  <ul>
+    <li><strong>גיבוי</strong>: שמרו תצורה דרך <strong>Maintenance > System > Save Configuration</strong>.</li>
+    <li><strong>רשת</strong>: בדקו חיבורים ו-IP דרך CLI (<code>show network-parameters</code>) אם הממשק או SupportAssist אינם זמינים.</li>
+    <li><strong>SupportAssist</strong>: בדקו יציאות 443/8443 ו-DNS אם החיבור נכשל.</li>
+    <li><strong>בריאות מערכת</strong>: בדקו SupportAssist Alerts ב-Dashboard.</li>
+    <li><strong>תמיכה</strong>: פנו ל-<a href="https://www.dell.com/support">Dell Support</a>.</li>
+    <li><strong>חיבור CLI באמצעות PuTTY</strong>:
+      <ul>
+        <li>הורידו והתקינו את PuTTY מ-<a href="https://www.putty.org">www.putty.org</a>.</li>
+        <li>פתחו את PuTTY, הזינו את כתובת ה-IP של Controller A (<code>10.0.0.2</code>) או Controller B (<code>10.0.0.3</code>), או IP שהוגדר ב-DHCP (בדקו עם <code>show network-parameters</code>).</li>
+        <li>בחרו בפרוטוקול <strong>SSH</strong> וב-Port <strong>22</strong>.</li>
+        <li>לחצו <strong>Open</strong> והזינו משתמש: <code>manage</code>, סיסמה: <code>!manage</code> (או הסיסמה שהוגדרה).</li>
+        <li>אם החיבור נכשל, ודאו ש-SSH מופעל במערכת (<strong>Settings > Services</strong> בממשק PowerVault Manager) ושהרשת תקינה.</li>
+      </ul>
+    </li>
+    <li><strong>חיבור CLI באמצעות Serial Console (למטרות תחזוקה/טכנאים)</strong>:
+      <ul>
+        <li>זהו את יציאת ה-Serial Console על Controller A או B (Micro-B USB עבור ME5, DB9 ל-3.5 מ"מ או USB A ל-Mini-B עבור ME4, מסומן כ-"Serial" או "Console" על הבקר).</li>
+        <li>חברו כבל סדרתי מתאים (ראו פירוט בסעיף "איפוס סיסמה" להלן) מהבקר למחשב טכנאי.</li>
+        <li>פתחו תוכנת מסוף כמו PuTTY, בחרו <strong>Serial</strong>, הגדירו: Baud Rate: <code>115200</code>, Data Bits: <code>8</code>, Parity: <code>None</code>, Stop Bits: <code>1</code>, Flow Control: <code>None</code>.</li>
+        <li>לחצו <strong>Open</strong> והזינו משתמש וסיסמה כנדרש (ראו "איפוס סיסמה" להלן).</li>
+        <li>השתמשו בפקודות CLI כמו <code>show network-parameters</code> או <code>set user</code> לתחזוקה.</li>
+        <li><strong>הערה</strong>: יציאת ה-Serial Console מיועדת לגישה ראשונית או כאשר SSH/רשת לא זמינים. היא משמשת טכנאים לאבחון או הגדרות ראשוניות.</li>
+      </ul>
+    </li>
+    <li><strong>איפוס סיסמה (במקרה שנשכחה)</strong>:
+      <ul>
+        <li><strong>הערות לפני תחילת התהליך</strong>:
+          <ul>
+            <li>אם סיסמת המשתמש ברמת <code>manage</code> אבדה, אין דרך לשחזר את הסיסמה המקורית. התהליך משחזר חשבונות משתמש לברירת מחדל.</li>
+            <li>התהליך אינו מוחק נתונים או תצורת מערכת, אך מוחק את כל חשבונות המשתמשים, כולל <code>manage</code>.</li>
+            <li>נדרשת גישה פיזית למערכת עם כבל סדרתי (לא ניתן לבצע דרך SSH/Telnet).</li>
+            <li>כל מערכת PowerVault ME מגיעה עם כבל סדרתי. אם הכבל אבד, השתמשו בכבל תואם (ראו טבלה להלן).</li>
+            <li>הורידו את הדרייבר "Dell ME Series Storage Array USB Utility" עבור חיבורי USB מ-<a href="https://www.dell.com/support">Dell Support</a> (בחרו את דגם ה-SAN שלכם ב-"Drivers & Downloads").</li>
+          </ul>
+        </li>
+        <li><strong>כבלים סדרתיים</strong>:
+          <ul>
+            <li><strong>PowerVault ME4</strong>:
+              <ul>
+                <li>כבל DB9 ל-3.5 מ"מ (מסופק עם המערכת, Dell Part Number: 4R3WX): הגדרות: 115200, 8, None, 1, ללא בקרת זרימה. מחשבים מודרניים עשויים לדרוש מתאם USB ל-DB9.</li>
+                <li>כבל USB A ל-Mini-B (5-pin, לא מסופק): הגדרות: 115200, 8, None, 1, ללא בקרת זרימה. דורש דרייבר (me-usb-driver-1.0.5.27.zip).</li>
+              </ul>
+            </li>
+            <li><strong>PowerVault ME5</strong>:
+              <ul>
+                <li>כבל USB-A ל-Micro-B (מסופק, Dell Part Number: 406GW): הגדרות: 115200, 8, None, 1, ללא בקרת זרימה. Windows 10 ואילך תומך בדרייבר מובנה, אחרת הורידו דרייבר (me-usb-driver-1.0.5.27.zip).</li>
+              </ul>
+            </li>
+            <li><strong>הערה</strong>: הכבל הסדרתי מסומן כ-"SUPPORT USE ONLY. DO NOT DISCARD." שמרו אותו במקום בטוח.</li>
+          </ul>
+        </li>
+        <li><strong>שחזור גישה ב-PowerVault ME4 (G275 firmware)</strong>:
+          <ul>
+            <li>חברו את הכבל הסדרתי (DB9 ל-3.5 מ"מ או USB A ל-Mini-B) ליציאת ה-Serial Console של Controller A או B.</li>
+            <li>פתחו תוכנת מסוף כמו PuTTY, בחרו <strong>Serial</strong>, הגדירו: Baud Rate: <code>115200</code>, Data Bits: <code>8</code>, Parity: <code>None</code>, Stop Bits: <code>1</code>, Flow Control: <code>None</code>.</li>
+            <li>לחצו <strong>Open</strong> ולחצו Enter להתחלת הסשן.</li>
+            <li>זהו את מספר הסידורי של הבקר (מופיע בפלט, למשל: <code>Serial Number: 00C0FF3C0182</code>).</li>
+            <li>התחברו עם משתמש: <code>restoreusers</code>, סיסמה: מספר הסידורי (למשל, <code>00C0FF3C0182</code>).
+              <pre>דוגמה:
+System Version: GT275R003-01
+Serial Number: 00C0FF3C0182
+10.0.0.2 login: restoreusers
+Password: 00C0FF3C0182
+# פלט: Restoring other controller's users to default</pre>
+            </li>
+            <li>ה-Management Controller (MC) יאתחל בשני הבקרים. לאחר האתחול, התחברו עם משתמש: <code>manage</code>, סיסמה: <code>!manage</code>.</li>
+            <li>שנו את סיסמת <code>manage</code> דרך PowerVault Manager (<strong>Settings > Users</strong>) או CLI:
+              <pre>דוגמה:
+set user manage password C0mpl3x!
+# Success: Command completed successfully.</pre>
+            </li>
+            <li>שנו גם את סיסמאות המשתמשים <code>monitor</code> ו-<code>ftp</code> (ברירת מחדל: <code>!monitor</code>, <code>!ftp</code>) באותו אופן.</li>
+          </ul>
+        </li>
+        <li><strong>שחזור גישה ב-PowerVault ME4 (G280 firmware) ו-ME5</strong>:
+          <ul>
+            <li>חברו את הכבל הסדרתי (Micro-B USB עבור ME5, DB9 ל-3.5 מ"מ או USB A ל-Mini-B עבור ME4) ליציאת ה-Serial Console של Controller A או B.</li>
+            <li>פתחו תוכנת מסוף כמו PuTTY, בחרו <strong>Serial</strong>, הגדירו: Baud Rate: <code>115200</code>, Data Bits: <code>8</code>, Parity: <code>None</code>, Stop Bits: <code>1</code>, Flow Control: <code>None</code>.</li>
+            <li>לחצו <strong>Open</strong> ולחצו Enter להתחלת הסשן.</li>
+            <li>זהו את מספר הסידורי של הבקר (מופיע בפלט, למשל: <code>Serial Number: 00C0FF3C0182</code>).</li>
+            <li>התחברו עם משתמש: <code>restoreusers</code>, סיסמה: מספר הסידורי (למשל, <code>00C0FF3C0182</code>).
+              <pre>דוגמה:
+System Version: GT280R004-01
+Serial Number: 00C0FF3C0182
+DellEMCF03185A login: restoreusers
+Password: 00C0FF3C0182</pre>
+            </li>
+            <li>ה-Management Controller יאתחל וימחק את כל חשבונות המשתמשים.</li>
+            <li>התחברו מחדש עם משתמש: <code>setup</code>, ללא סיסמה (לחצו Enter).
+              <pre>דוגמה:
+DellEMCF03185A login: setup
+Password: [לחצו Enter]</pre>
+            </li>
+            <li>תתבקשו ליצור משתמש ניהול חדש (למשל, <code>manage</code>, <code>Admin</code>, או שם אחר) וסיסמה מורכבת (8–32 תווים, כולל אות גדולה, קטנה, מספר, ותו לא-אלפנומרי, ללא רווח או תווים כמו <code>" ' , < > \</code>).
+              <pre>דוגמה:
+Enter username> manage
+Enter Password> C0mpl3x!
+Confirm password> C0mpl3x!
+# פלט: System will automatically log you in with your new credentials.</pre>
+            </li>
+            <li><strong>הגדרת LDAP</strong>:
+              <ul>
+                <li><strong>תנאים מוקדמים</strong>:
+                  <ul>
+                    <li>ודאו שקושחת הבקר היא ME5.1.1.0.5 ומעלה (בדקו עם <code>show version</code> ב-CLI).</li>
+                    <li>השתמשו בשרת Active Directory (Windows Server 2016/2019/2022) עם LDAPS מופעל (יציאה 636, TLS v1.2).</li>
+                    <li>התקינו תעודת CA תקפה בשרת ה-LDAP ובמערכת ה-ME5 (הורידו תעודה מרשות הסמכה, כגון Microsoft CA, והעלו אותה דרך PowerVault Manager).</li>
+                    <li>הגדירו DNS ב-<strong>Settings > Network > DNS</strong> כך שיתאים לשרת ה-Active Directory (למשל, <code>192.168.1.10</code>).</li>
+                    <li>ודאו שמשתמשי LDAP מוגדרים עם UserPrincipalName (למשל, <code>username@domain.com</code>) וחברים בקבוצה אחת בלבד (למשל, <code>ArrayAdmins</code>) ב-Active Directory.</li>
+                  </ul>
+                </li>
+                <li><strong>שלבי הגדרה ב-PowerVault Manager</strong>:
+                  <ul>
+                    <li>התחברו ל-PowerVault Manager עם משתמש <code>manage</code> (למשל, <code>https://10.0.0.2</code>).</li>
+                    <li>נווטו ל-<strong>Settings > Users > LDAP</strong>.</li>
+                    <li>סמנו <strong>Enable LDAP</strong>.</li>
+                    <li>הזינו את פרטי שרת ה-LDAP:
+                      <ul>
+                        <li><strong>Server</strong>: כתובת IP או FQDN של שרת ה-Active Directory (למשל, <code>192.168.1.10</code> או <code>ldap.example.com</code>).</li>
+                        <li><strong>Port</strong>: <code>636</code> (LDAPS).</li>
+                        <li><strong>Protocol</strong>: בחרו TLS v1.2.</li>
+                        <li><strong>Certificate</strong>: לחצו <strong>Browse</strong> והעלו את קובץ תעודת ה-CA (.cer או .pem) של שרת ה-LDAP.</li>
+                      </ul>
+                    </li>
+                    <li>הזינו את <strong>User Search Base</strong> (למשל, <code>ou=colo,dc=bigco2,dc=com,dc=local</code>) כדי לציין את המיקום ב-Active Directory שבו נמצאים משתמשי LDAP.</li>
+                    <li>מיפוי קבוצות LDAP לתפקידים במערכת:
+                      <ul>
+                        <li>נווטו ל-<strong>LDAP Group Mapping</strong>.</li>
+                        <li>הוסיפו קבוצה (למשל, <code>ArrayAdmins</code>) והקצו לה תפקיד, כגון <code>manage</code> (לניהול מלא) או <code>monitor</code> (לקריאה בלבד).</li>
+                        <li>דוגמה: עבור קבוצה בשם <code>ArrayAdmins</code>, הזינו <code>cn=ArrayAdmins,ou=colo,dc=bigco2,dc=com,dc=local</code> והקצו תפקיד <code>manage</code>.</li>
+                      </ul>
+                    </li>
+                    <li>לחצו <strong>Test LDAP Settings</strong> לבדיקת החיבור. הזינו UPN של משתמש (למשל, <code>username@domain.com</code>) ובדקו תגובה מוצלחת.</li>
+                    <li>לחצו <strong>Apply</strong> לשמירת ההגדרות.</li>
+                  </ul>
+                </li>
+                <li><strong>אימות</strong>:
+                  <ul>
+                    <li>התחברו מחדש ל-PowerVault Manager עם UPN של משתמש LDAP (למשל, <code>username@domain.com</code>) והסיסמה שלו ב-Active Directory.</li>
+                    <li>בדקו יומני Audit ב-<strong>Maintenance > Support > Audit Log Activity</strong> לאישור כניסה מוצלחת.</li>
+                    <li>אם משתמשים ב-Controller B, ודאו שגרפים מוצגים כראוי. אם לא, עדכנו לקושחה ME5.1.2.1.0 או השתמשו בחשבון מקומי (<code>manage</code>).</li>
+                  </ul>
+                </li>
+                <li><strong>פתרון תקלות</strong>:
+                  <ul>
+                    <li>אם מתקבלת שגיאת "Unable to Authenticate Login":
+                      <ul>
+                        <li>ודאו שקושחת הבקר היא ME5.1.1.0.5 ומעלה (ראו סעיף 7 לעדכון קושחה).</li>
+                        <li>בדקו שהגדרות DNS תואמות את Active Directory ב-<strong>Settings > Network > DNS</strong>.</li>
+                        <li>ודאו ש-LDAPS מופעל בשרת (יציאה 636, TLS v1.2) ושהתעודה תקפה. בדקו עם:
+                          <pre>openssl s_client -connect ldap.example.com:636</pre>
+                        </li>
+                        <li>בדקו את ה-UserPrincipalName ב-Active Directory עם PowerShell:
+                          <pre>Get-ADUser username -Properties UserPrincipalName,MemberOf</pre>
+                          ודאו שה-UPN הוא בפורמט <code>username@domain.com</code> (למשל, <code>tom_smith@liverpool.anfield.net</code>).
+                        </li>
+                        <li>ודאו שהמשתמש חבר בקבוצה אחת בלבד במערכת האחסון (למשל, <code>ArrayAdmins</code>). חברות במספר קבוצות עלולה לגרום לסתירות.</li>
+                        <li>בדקו יומני Audit ב-<strong>Maintenance > Support > Audit Log Activity</strong> לפרטי השגיאה.</li>
+                      </ul>
+                    </li>
+                    <li>אם החיבור לשרת LDAP נכשל, בדקו יציאות רשת (636) וחומת אש בשרת ה-Active Directory.</li>
+                    <li>אם התעודה לא תקפה, הורידו מחדש את תעודת ה-CA והעלו אותה מחדש ל-PowerVault Manager.</li>
+                    <li>פנו לתמיכת Dell עם יומני Audit ו-Service Tag אם הבעיה נמשכת.</li>
+                  </ul>
+                </li>
+                <li><strong>שיטות עבודה מומלצות</strong>:
+                  <ul>
+                    <li>השתמשו ב-LDAPS בלבד (לא LDAP לא מאובטח, יציאה 389).</li>
+                    <li>עדכנו את קושחת הבקר לגרסה האחרונה (ראו סעיף 7).</li>
+                    <li>תעדו את User Search Base, שמות קבוצות, ותפקידים.</li>
+                    <li>בדקו חיבורי LDAP תקופתית דרך <strong>Test LDAP Settings</strong>.</li>
+                    <li>שמרו חשבון מקומי (<code>manage</code>) כגיבוי למקרה של כשל ב-LDAP.</li>
+                  </ul>
+                </li>
+              </ul>
+            </li>
+          </ul>
+        </li>
+        <li><strong>פנייה לתמיכת Dell</strong>:
+          <ul>
+            <li>אם אין גישה לכבל סדרתי או למספר הסידורי, פנו לתמיכת Dell ב-<a href="https://www.dell.com/support">Dell Support</a> עם מספר ה-Service Tag של המערכת (מצוי על התווית במארז או בפלט של <code>show system</code>).</li>
+            <li>Dell תספק קוד איפוס זמני או תדריך אתכם בתהליך איפוס דרך בקרת חומרה.</li>
+          </ul>
+        </li>
+        <li><strong>הערות</strong>:
+          <ul>
+            <li>לפני שינוי סיסמאות, גבו את התצורה דרך <strong>Maintenance > System > Save Configuration</strong>.</li>
+            <li>שמרו את הסיסמה החדשה במקום מאובטח.</li>
+            <li>אם משתמשים בכבל USB, ודאו שהדרייבר מותקן במחשב (זמין ב-<a href="https://www.dell.com/support">Dell Support</a>).</li>
+          </ul>
+        </li>
+      </ul>
+    </li>
+  </ul>
+
+  <!-- הוסר: דיאגרמת זרימת תהליך התקנה -->
+
+  <h2>9. שיטות עבודה מומלצות</h2>
+  <ul>
+    <li><strong>תיעוד</strong>: שמרו IP, Initiator IDs, RAID Levels, ו-Contact Details של SupportAssist.</li>
+    <li><strong>קושחה</strong>: עדכנו דרך <strong>Maintenance > Firmware</strong>.</li>
+    <li><strong>אבטחה</strong>: הגדירו סיסמאות חזקות והפעילו FDE.</li>
+    <li><strong>בדיקות</strong>: בצעו Scrub ל-Disk Groups ובדיקות SupportAssist תקופתיות.</li>
+  </ul>
+
+  <h2>10. מידע נוסף</h2>
+  <p>עיינו ב-Administrator's Guide של Dell PowerVault ME5 Series או פנו לתמיכה ב-<a href="https://www.dell.com/support">Dell Support</a>.</p>
+
+  <script>
+    // Pool Capacity Allocation Chart
+    const poolChart = document.getElementById('poolChart').getContext('2d');
+    new Chart(poolChart, {
+      type: 'pie',
+      data: {
+        labels: ['Pool A', 'Pool B'],
+        datasets: [{
+          data: [60, 40],
+          backgroundColor: ['#36A2EB', '#4CAF50'],
+          borderColor: ['#FFFFFF', '#FFFFFF'],
+          borderWidth: 1
+        }]
+      },
+      options: {
+        plugins: {
+          title: {
+            display: true,
+            text: 'Pool Capacity Allocation (Example)',
+            color: '#333333'
+          },
+          legend: {
+            position: 'top',
+            labels: { color: '#333333' }
+          }
+        }
+      }
+    });
+
+    // SupportAssist Alerts Chart
+    const alertsChart = document.getElementById('alertsChart').getContext('2d');
+    new Chart(alertsChart, {
+      type: 'bar',
+      data: {
+        labels: ['Disk Failure', 'Network Error', 'Firmware Update', 'Other'],
+        datasets: [{
+          label: 'SupportAssist Alerts',
+          data: [5, 2, 3, 1],
+          backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4CAF50'],
+          borderColor: ['#FFFFFF', '#FFFFFF', '#FFFFFF', '#FFFFFF'],
+          borderWidth: 1
+        }]
+      },
+      options: {
+        plugins: {
+          title: {
+            display: true,
+            text: 'SupportAssist Alerts (Example)',
+            color: '#333333'
+          },
+          legend: {
+            display: false
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            title: {
+              display: true,
+              text: 'Number of Alerts'
+            }
+          },
+          x: {
+            title: {
+              display: true,
+              text: 'Alert Type'
+            }
+          }
+        }
+      }
+    });
+  </script>
+</body>
+</html>
